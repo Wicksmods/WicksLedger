@@ -535,7 +535,7 @@ local optPanel
 
 local function BuildOptions()
     local OPT_W = 290
-    local OPT_H = 230
+    local OPT_H = 256
     local ROW_Y = 20
 
     optPanel = CreateFrame("Frame", "WicksLedgerOptions", UIParent)
@@ -699,8 +699,51 @@ local function BuildOptions()
         RefreshAutoBtn()
     end)
 
+    -- Hard lock toggle
+    local hardY = autoY + ROW_Y
+    local hardBtn = CreateFrame("Button", nil, optPanel)
+    hardBtn:SetHeight(ROW_Y)
+    hardBtn:SetPoint("TOPLEFT",  optPanel, "TOPLEFT",  PAD,  -hardY)
+    hardBtn:SetPoint("TOPRIGHT", optPanel, "TOPRIGHT", -PAD, -hardY)
+
+    local hardDot = hardBtn:CreateTexture(nil, "ARTWORK")
+    hardDot:SetSize(7, 7)
+    hardDot:SetPoint("LEFT", hardBtn, "LEFT", 0, 0)
+    hardBtn.dot = hardDot
+
+    local hardLbl = hardBtn:CreateFontString(nil, "OVERLAY")
+    hardLbl:SetFont("Fonts\\FRIZQT__.TTF", 10, "")
+    hardLbl:SetPoint("LEFT", hardDot, "RIGHT", 6, 0)
+    hardLbl:SetText("Hard lock  (persist across resets)")
+    hardBtn.lbl = hardLbl
+
+    local function RefreshHardBtn()
+        local on = WL.db and WL.db.hardLock
+        hardDot:SetVertexColor(
+            on and C_GREEN[1] or C_DIM[1],
+            on and C_GREEN[2] or C_DIM[2],
+            on and C_GREEN[3] or C_DIM[3], 1)
+        hardLbl:SetTextColor(
+            on and C_TEXT[1] or C_DIM[1],
+            on and C_TEXT[2] or C_DIM[2],
+            on and C_TEXT[3] or C_DIM[3], 1)
+    end
+
+    hardBtn:SetScript("OnClick", function()
+        if WL.db then WL.db.hardLock = not WL.db.hardLock end
+        RefreshHardBtn()
+    end)
+    hardBtn:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:AddLine("Hard lock", 1, 1, 1)
+        GameTooltip:AddLine("Session pauses on instance exit instead of stopping.", 0.8, 0.8, 0.8, true)
+        GameTooltip:AddLine("Re-enter the instance to resume where you left off.", 0.8, 0.8, 0.8, true)
+        GameTooltip:Show()
+    end)
+    hardBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
     -- Divider 2
-    local div2Y = autoY + ROW_Y + 6
+    local div2Y = hardY + ROW_Y + 6
     local div2 = optPanel:CreateTexture(nil, "BORDER")
     div2:SetColorTexture(C_BORDER[1], C_BORDER[2], C_BORDER[3], 0.5)
     div2:SetHeight(1)
@@ -733,6 +776,7 @@ local function BuildOptions()
     optPanel:SetScript("OnShow", function()
         RefreshRadios()
         RefreshAutoBtn()
+        RefreshHardBtn()
     end)
 
     optPanel:Hide()

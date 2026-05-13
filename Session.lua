@@ -238,12 +238,37 @@ end)
 WL:On("ZONE", function(isInstance, instanceType)
     if not WL.db or not WL.db.autoMode then return end
     if isInstance and not S.active then
-        S:Start()
+        if WL.db.hardLock and WL.charDB and WL.charDB.activeSession then
+            -- Hard-lock resume: restore the paused session instead of starting fresh.
+            -- startMoney is adjusted so goldDelta stays accurate across the zone gap.
+            RestoreActive()
+            S.startMoney = GetMoney() - S.goldDelta
+            PersistActive()
+            if WL.UI and WL.UI.OnSessionStart then WL.UI:OnSessionStart() end
+        else
+            S:Start()
+        end
     elseif not isInstance and S.active then
         -- Ghost after a wipe: player released to graveyard outside the instance.
         -- Don't stop -- they'll run back in.
         if UnitIsGhost("player") then return end
-        S:Stop()
+        if WL.db.hardLock then
+            -- Hard-lock: pause instead of stop. Save state, go idle, resume on re-entry.
+            S.goldDelta = GetMoney() - (S.startMoney or GetMoney())
+            if not S.maxLevel and S.startXP then
+                local cur = UnitXP("player")
+                local delta = cur - S.startXP
+                if delta < 0 then delta = delta + UnitXPMax("player") end
+                S.xpDelta = delta
+            end
+            RecalcTotal()
+            S.active = false
+            PersistActive()
+            if WL.UI and WL.UI.OnSessionStop then WL.UI:OnSessionStop() end
+            print("|cff4FC778Wick's Ledger|r: session paused (hard lock -- re-enter to resume)")
+        else
+            S:Stop()
+        end
     end
 end)
 

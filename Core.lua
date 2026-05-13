@@ -15,6 +15,7 @@ local DEFAULTS = {
     minimap     = { hide = false, position = 225 },
     lock        = false,
     autoMode    = true,
+    hardLock    = false,  -- when true, zone changes never auto-stop the session
     priceSource = "auto",   -- "auto" | "TSM" | "Auctionator" | "Auctioneer" | "vendor"
     barPos      = nil,
     panelPos    = nil,
@@ -144,6 +145,9 @@ SlashCmdList.WICKSLEDGER = function(input)
     elseif cmd == "auto" then
         WL.db.autoMode = not WL.db.autoMode
         print(string.format("|cff4FC778Wick's Ledger|r: auto mode %s", WL.db.autoMode and "on" or "off"))
+    elseif cmd == "lock" then
+        WL.db.hardLock = not WL.db.hardLock
+        print(string.format("|cff4FC778Wick's Ledger|r: hard lock %s", WL.db.hardLock and "on -- session persists across instance resets" or "off"))
     elseif cmd == "help" or cmd == "?" then
         print("|cff4FC778Wick's Ledger|r commands:")
         print("  /wledger            toggle panel")
@@ -151,6 +155,7 @@ SlashCmdList.WICKSLEDGER = function(input)
         print("  /wledger stop       stop session manually")
         print("  /wledger reset      clear current session")
         print("  /wledger auto       toggle auto instance-detection")
+        print("  /wledger lock       toggle hard lock (persist across resets)")
     else
         if WL.UI and WL.UI.Toggle then WL.UI:Toggle() end
     end
