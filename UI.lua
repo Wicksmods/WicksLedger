@@ -307,6 +307,7 @@ end
 -- ITEMIZED PANEL
 -- ============================================================
 local panel
+local PopulatePanel, PopulateHistory
 
 local function BuildPanel()
     panel = CreateFrame("Frame", "WicksLedgerPanel", UIParent)
@@ -502,7 +503,12 @@ local function BuildPanel()
         v:SetPoint("BOTTOMRIGHT", grip, "BOTTOMRIGHT"); v:SetSize(2, 10)
     end
     grip:SetScript("OnMouseDown", function(self, btn)
-        if btn == "LeftButton" then panel:StartSizing("BOTTOMRIGHT") end
+        if btn ~= "LeftButton" then return end
+        -- Pin TOPLEFT so the frame doesn't jump when sizing starts
+        local x, y = panel:GetLeft(), panel:GetTop()
+        panel:ClearAllPoints()
+        panel:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", x, y)
+        panel:StartSizing("BOTTOMRIGHT")
     end)
     grip:SetScript("OnMouseUp", function()
         panel:StopMovingOrSizing()
@@ -746,7 +752,7 @@ end
 -- ============================================================
 -- PANEL POPULATION
 -- ============================================================
-local function PopulateHistory()
+PopulateHistory = function()
     local content = panel.content
     for _, row in ipairs(activeRows) do ReleaseRow(row) end
     activeRows = {}
@@ -772,7 +778,7 @@ local function PopulateHistory()
     else
         for i, entry in ipairs(history) do
             -- Section header: date + zone
-            local date = entry.startTime and date("%Y-%m-%d %H:%M", entry.startTime) or "?"
+            local dateStr = entry.startTime and date("%Y-%m-%d %H:%M", entry.startTime) or "?"
             local zone = entry.zoneName or "?"
             local hdr = AcquireRow(content, panW)
             table.insert(activeRows, hdr)
@@ -781,7 +787,7 @@ local function PopulateHistory()
             hdr.icon:SetTexture(nil)
             hdr.name:SetFont("Fonts\\FRIZQT__.TTF", 9, "")
             hdr.name:SetTextColor(C_DIM[1], C_DIM[2], C_DIM[3], 1)
-            hdr.name:SetText(string.format("#%d  %s  %s", i, date, zone))
+            hdr.name:SetText(string.format("#%d  %s  %s", i, dateStr, zone))
             -- elapsed + total on right
             local elapsed = entry.elapsed or 0
             local h = math.floor(elapsed / 3600)
@@ -831,7 +837,7 @@ local function PopulateHistory()
     content:SetHeight(math.max(y, 1))
 end
 
-local function PopulatePanel()
+PopulatePanel = function()
     local content = panel.content
     for _, row in ipairs(activeRows) do ReleaseRow(row) end
     activeRows = {}

@@ -240,6 +240,9 @@ WL:On("ZONE", function(isInstance, instanceType)
     if isInstance and not S.active then
         S:Start()
     elseif not isInstance and S.active then
+        -- Ghost after a wipe: player released to graveyard outside the instance.
+        -- Don't stop -- they'll run back in.
+        if UnitIsGhost("player") then return end
         S:Stop()
     end
 end)
