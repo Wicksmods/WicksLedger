@@ -1,10 +1,12 @@
 -- Wick's Ledger
--- Session.lua: session lifecycle, loot tracking, gold delta
+-- Session.lua: session lifecycle, loot tracking, gold delta, persist/restore, history
 
 local ADDON, ns = ...
 local WL = WicksLedger
 WL.Session = WL.Session or {}
 local S = WL.Session
+
+local MAX_HISTORY = 5
 
 -- ============================================================
 -- STATE
@@ -17,16 +19,17 @@ S.loot        = {}   -- { [itemLink] = { itemID, name, icon, count, copper, sour
 S.totalCopper = 0    -- goldDelta + loot value
 S.zoneName    = nil
 
+-- XP
+S.startXP     = nil
+S.xpDelta     = 0
+S.maxLevel    = false
+
+-- Rep: { [factionID] = { name, delta } }
+S.rep         = {}
+
 -- ============================================================
 -- HELPERS
 -- ============================================================
-local function ParseItemLink(link)
-    if not link then return nil, nil end
-    local itemID = link:match("item:(%d+)")
-    if not itemID then return nil, nil end
-    return tonumber(itemID), link
-end
-
 local function ItemIDFromLink(link)
     local id = link and link:match("item:(%d+)")
     return id and tonumber(id)
@@ -41,10 +44,83 @@ local function RecalcTotal()
 end
 
 -- ============================================================
+-- PERSIST / RESTORE
+-- ============================================================
+local function PersistActive()
+    if not WL.charDB then return end
+    if not S.active then
+        WL.charDB.activeSession = nil
+        return
+    end
+    -- Serialize loot (keyed by itemID string) and rep
+    WL.charDB.activeSession = {
+        startTime  = S.startTime,
+        startMoney = S.startMoney,
+        goldDelta  = S.goldDelta,
+        totalCopper= S.totalCopper,
+        zoneName   = S.zoneName,
+        startXP    = S.startXP,
+        xpDelta    = S.xpDelta,
+        maxLevel   = S.maxLevel,
+        loot       = S.loot,
+        rep        = S.rep,
+    }
+end
+
+local function RestoreActive()
+    if not WL.charDB then return end
+    local saved = WL.charDB.activeSession
+    if not saved or not saved.startTime then return end
+
+    -- Stale-session guard: discard if older than 8 hours.
+    -- Covers crashes, force-quits, and forgotten sessions.
+    if (time() - saved.startTime) > 28800 then
+        WL.charDB.activeSession = nil
+        return
+    end
+
+    S.active      = true
+    S.startTime   = saved.startTime
+    S.startMoney  = saved.startMoney
+    S.goldDelta   = saved.goldDelta   or 0
+    S.totalCopper = saved.totalCopper or 0
+    S.zoneName    = saved.zoneName
+    S.startXP     = saved.startXP
+    S.xpDelta     = saved.xpDelta    or 0
+    S.maxLevel    = saved.maxLevel   or false
+    S.loot        = saved.loot       or {}
+    S.rep         = saved.rep        or {}
+end
+
+-- ============================================================
+-- HISTORY
+-- ============================================================
+local function CommitToHistory()
+    if not WL.charDB then return end
+    -- Discard sessions with nothing earned
+    if (S.totalCopper or 0) <= 0 then return end
+
+    local entry = {
+        startTime   = S.startTime,
+        elapsed     = S:Elapsed(),
+        goldDelta   = S.goldDelta,
+        totalCopper = S.totalCopper,
+        zoneName    = S.zoneName,
+        xpDelta     = S.xpDelta,
+        loot        = S.loot,
+        rep         = S.rep,
+    }
+
+    local history = WL.charDB.history
+    table.insert(history, 1, entry)   -- newest first
+    while #history > MAX_HISTORY do
+        table.remove(history)
+    end
+end
+
+-- ============================================================
 -- LOOT PARSING
 -- ============================================================
--- "You receive loot: |Hitem:...|h[Name]|h x3."
--- "You loot |Hitem:...|h[Name]|h."
 local LOOT_PATTERNS = {
     "You receive loot: (.+)$",
     "You loot (.+)$",
@@ -58,10 +134,8 @@ local function ParseLootMessage(msg)
     end
     if not body then return nil, nil, nil end
 
-    -- Strip trailing period
     body = body:gsub("%.$", "")
 
-    -- Count suffix " x<N>"
     local count = 1
     local suffix = body:match(" x(%d+)$")
     if suffix then
@@ -69,7 +143,6 @@ local function ParseLootMessage(msg)
         body  = body:gsub(" x%d+$", "")
     end
 
-    -- Extract item link
     local link = body:match("|H(item:[^|]+)|h%[.-%]|h")
     if link then link = "|H" .. link .. "|h[" .. (body:match("|h%[(.-)%]|h") or "?") .. "]|h" end
     if not link then link = body end
@@ -81,15 +154,28 @@ end
 -- ============================================================
 -- SESSION CONTROL
 -- ============================================================
+local function SnapshotXP()
+    local level = UnitLevel("player")
+    local maxLvl = 70
+    if level >= maxLvl then return nil, true end
+    return UnitXP("player"), false
+end
+
 function S:Start()
     if S.active then return end
-    S.active     = true
-    S.startTime  = time()
-    S.startMoney = GetMoney()
-    S.goldDelta  = 0
-    S.loot       = {}
+    S.active      = true
+    S.startTime   = time()
+    S.startMoney  = GetMoney()
+    S.goldDelta   = 0
+    S.loot        = {}
     S.totalCopper = 0
-    S.zoneName   = GetRealZoneText()
+    S.rep         = {}
+    S.zoneName    = GetRealZoneText()
+
+    S.startXP, S.maxLevel = SnapshotXP()
+    S.xpDelta = 0
+
+    PersistActive()
     if WL.UI and WL.UI.OnSessionStart then WL.UI:OnSessionStart() end
     print(string.format("|cff4FC778Wick's Ledger|r: session started in %s", S.zoneName or "?"))
 end
@@ -97,10 +183,14 @@ end
 function S:Stop()
     if not S.active then return end
     S.active = false
-    -- Final gold delta
-    local currentMoney = GetMoney()
-    S.goldDelta = currentMoney - (S.startMoney or currentMoney)
+    S.goldDelta = GetMoney() - (S.startMoney or GetMoney())
+    if not S.maxLevel and S.startXP then
+        S.xpDelta = UnitXP("player") - S.startXP
+        if S.xpDelta < 0 then S.xpDelta = S.xpDelta + UnitXPMax("player") end
+    end
     RecalcTotal()
+    CommitToHistory()
+    PersistActive()   -- clears activeSession
     if WL.UI and WL.UI.OnSessionStop then WL.UI:OnSessionStop() end
     print(string.format("|cff4FC778Wick's Ledger|r: session ended -- %s earned",
         WL.Prices and WL.Prices:FormatCopper(S.totalCopper) or "?"))
@@ -113,6 +203,11 @@ function S:Reset()
     S.goldDelta   = 0
     S.loot        = {}
     S.totalCopper = 0
+    S.rep         = {}
+    S.startXP     = nil
+    S.xpDelta     = 0
+    S.maxLevel    = false
+    PersistActive()   -- clears activeSession
     if WL.UI and WL.UI.OnSessionReset then WL.UI:OnSessionReset() end
 end
 
@@ -125,7 +220,19 @@ end
 -- EVENT HANDLERS
 -- ============================================================
 WL:On("LOGIN", function()
-    -- nothing to restore yet -- sessions don't persist across logins
+    RestoreActive()
+    if S.active then
+        print(string.format("|cff4FC778Wick's Ledger|r: session resumed in %s (%s elapsed)",
+            S.zoneName or "?",
+            (function()
+                local e = S:Elapsed()
+                local h = math.floor(e/3600)
+                local m = math.floor((e%3600)/60)
+                if h > 0 then return string.format("%dh %dm", h, m) end
+                return string.format("%dm", m)
+            end)()))
+        if WL.UI and WL.UI.OnSessionStart then WL.UI:OnSessionStart() end
+    end
 end)
 
 WL:On("ZONE", function(isInstance, instanceType)
@@ -142,6 +249,27 @@ WL:On("MONEY", function()
     local current = GetMoney()
     S.goldDelta   = current - (S.startMoney or current)
     RecalcTotal()
+    PersistActive()
+    if WL.UI and WL.UI.OnUpdate then WL.UI:OnUpdate() end
+end)
+
+WL:On("XP", function()
+    if not S.active or S.maxLevel or not S.startXP then return end
+    local cur = UnitXP("player")
+    local delta = cur - S.startXP
+    if delta < 0 then delta = delta + UnitXPMax("player") end
+    S.xpDelta = delta
+    PersistActive()
+    if WL.UI and WL.UI.OnUpdate then WL.UI:OnUpdate() end
+end)
+
+WL:On("REP", function(factionName, amount)
+    if not S.active then return end
+    if not S.rep[factionName] then
+        S.rep[factionName] = { name = factionName, delta = 0 }
+    end
+    S.rep[factionName].delta = S.rep[factionName].delta + amount
+    PersistActive()
     if WL.UI and WL.UI.OnUpdate then WL.UI:OnUpdate() end
 end)
 
@@ -150,7 +278,8 @@ WL:On("LOOT_MSG", function(msg)
     local itemID, link, count = ParseLootMessage(msg)
     if not itemID then return end
 
-    local copper, source = WL.Prices and WL.Prices:GetPrice(itemID)
+    local copper, source
+    if WL.Prices then copper, source = WL.Prices:GetPrice(itemID) end
     local _, _, _, _, _, _, _, _, _, icon = GetItemInfo(itemID)
 
     local key = tostring(itemID)
@@ -168,5 +297,6 @@ WL:On("LOOT_MSG", function(msg)
     end
 
     RecalcTotal()
+    PersistActive()
     if WL.UI and WL.UI.OnUpdate then WL.UI:OnUpdate() end
 end)

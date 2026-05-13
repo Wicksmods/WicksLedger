@@ -6,15 +6,23 @@ WicksLedger = WicksLedger or {}
 local WL = WicksLedger
 ns.WL = WL
 
-WL.version = "0.1.0"
+WL.version = "0.2.0"
 
 -- ============================================================
 -- DEFAULTS
 -- ============================================================
 local DEFAULTS = {
-    minimap  = { hide = false, position = 225 },
-    lock     = false,
-    autoMode = true,   -- auto-start/stop on instance enter/exit
+    minimap     = { hide = false, position = 225 },
+    lock        = false,
+    autoMode    = true,
+    priceSource = "auto",   -- "auto" | "TSM" | "Auctionator" | "Auctioneer" | "vendor"
+    barPos      = nil,
+    panelPos    = nil,
+    panelSize   = nil,
+    optPos      = nil,
+    barShown    = false,
+    panelShown  = false,
+    optShown    = false,
 }
 
 -- ============================================================
@@ -46,6 +54,8 @@ local EVENTS = {
     "CHAT_MSG_LOOT",
     "BAG_UPDATE",
     "ZONE_CHANGED_NEW_AREA",
+    "PLAYER_XP_UPDATE",
+    "COMBAT_TEXT_UPDATE",
 }
 for _, e in ipairs(EVENTS) do
     pcall(frame.RegisterEvent, frame, e)
@@ -67,6 +77,10 @@ frame:SetScript("OnEvent", function(self, event, ...)
             end
         end
         WL.db = db
+        -- Per-character DB: active session + history
+        WicksLedgerCharDB = WicksLedgerCharDB or {}
+        WL.charDB = WicksLedgerCharDB
+        WL.charDB.history = WL.charDB.history or {}
         Fire("LOGIN")
         return
     end
@@ -95,6 +109,19 @@ frame:SetScript("OnEvent", function(self, event, ...)
 
     if event == "BAG_UPDATE" then
         Fire("BAG_UPDATE", ...)
+        return
+    end
+
+    if event == "PLAYER_XP_UPDATE" then
+        Fire("XP")
+        return
+    end
+
+    if event == "COMBAT_TEXT_UPDATE" then
+        local combatType, factionName, amount = ...
+        if combatType == "FACTION" and factionName and amount then
+            Fire("REP", factionName, tonumber(amount) or 0)
+        end
         return
     end
 end)

@@ -10,26 +10,13 @@ local P = WL.Prices
 -- TSM
 -- ============================================================
 local function GetTSMPrice(itemID)
-    -- TSM stores per-item market data in TradeSkillMaster_AuctionDB global
-    -- Top-level key is the realm string; each item key is "i:<itemId>"
-    local db = _G["TradeSkillMaster_AuctionDB"]
-    if not db then return nil end
-    local realm = GetRealmName()
-    local realmData = db[realm] or db["realm"] or nil
-    if not realmData then
-        -- flat layout: some TSM versions store directly under db
-        realmData = db
-    end
-    local key = "i:" .. itemID
-    local entry = realmData[key]
-    if not entry then return nil end
-    -- TSM copper prices stored as integers
-    if type(entry) == "number" then return entry end
-    -- Some versions store a table with minBuyout / marketValue
-    if type(entry) == "table" then
-        return entry.minBuyout or entry.marketValue or nil
-    end
-    return nil
+    local api = _G["TSM_API"]
+    if not api or not api.GetCustomPriceValue then return nil end
+    local itemString = "i:" .. itemID
+    local ok, v = pcall(api.GetCustomPriceValue, "dbminbuyout", itemString)
+    if ok and v and v > 0 then return v end
+    ok, v = pcall(api.GetCustomPriceValue, "dbmarket", itemString)
+    return (ok and v and v > 0) and v or nil
 end
 
 -- ============================================================
@@ -85,10 +72,43 @@ end
 -- Public API
 -- ============================================================
 
--- Returns { copper, source } for itemID, or nil if completely unknown.
+-- Returns copper, source for itemID. source may be nil if unvalued.
 function P:GetPrice(itemID)
+    local src = WL.db and WL.db.priceSource or "auto"
     local v
 
+    if src == "TSM" then
+        v = GetTSMPrice(itemID)
+        if v and v > 0 then return v, "TSM" end
+        -- fallthrough to vendor only
+        v = GetVendorPrice(itemID)
+        if v and v > 0 then return v, "vendor" end
+        return nil, nil
+    end
+
+    if src == "Auctionator" then
+        v = GetAuctionatorPrice(itemID)
+        if v and v > 0 then return v, "Auctionator" end
+        v = GetVendorPrice(itemID)
+        if v and v > 0 then return v, "vendor" end
+        return nil, nil
+    end
+
+    if src == "Auctioneer" then
+        v = GetAuctioneerPrice(itemID)
+        if v and v > 0 then return v, "Auctioneer" end
+        v = GetVendorPrice(itemID)
+        if v and v > 0 then return v, "vendor" end
+        return nil, nil
+    end
+
+    if src == "vendor" then
+        v = GetVendorPrice(itemID)
+        if v and v > 0 then return v, "vendor" end
+        return nil, nil
+    end
+
+    -- "auto": full waterfall TSM > Auctionator > Auctioneer > vendor
     v = GetTSMPrice(itemID)
     if v and v > 0 then return v, "TSM" end
 
@@ -102,6 +122,13 @@ function P:GetPrice(itemID)
     if v and v > 0 then return v, "vendor" end
 
     return nil, nil
+end
+
+-- Format copper rounded to whole gold only (for /hr projections).
+function P:FormatGold(copper)
+    local g = math.floor((copper or 0) / 10000)
+    if g <= 0 then return "|cffffd7000g|r" end
+    return string.format("|cffffd700%dg|r", g)
 end
 
 -- Format copper as "Xg Ys Zc" with WoW gold/silver/copper coloring.
