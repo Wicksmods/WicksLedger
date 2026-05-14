@@ -6,7 +6,7 @@ WicksLedger = WicksLedger or {}
 local WL = WicksLedger
 ns.WL = WL
 
-WL.version = "0.2.0"
+WL.version = "0.2.1"
 
 -- ============================================================
 -- DEFAULTS

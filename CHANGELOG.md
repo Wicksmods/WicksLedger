@@ -1,5 +1,10 @@
 # Changelog -- Wick's Ledger
 
+## 0.2.1 -- 2026-05-13
+
+- Grey (Poor quality) items collapse into a single Junk row valued at vendor price. Count shown, no individual entries cluttering the list.
+- Hard lock mode: session pauses on instance exit instead of stopping. Re-enter to resume where you left off, gold and loot intact. Toggle via `/wledger lock` or the Options panel.
+
 ## 0.2.0 -- 2026-05-13
 
 ### Session persistence + history
