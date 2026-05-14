@@ -928,12 +928,15 @@ PopulatePanel = function()
 
     -- ---- Items ----
     local items = {}
-    for _, entry in pairs(S.loot) do table.insert(items, entry) end
+    for _, entry in pairs(S.loot) do
+        if not entry.isJunk then table.insert(items, entry) end
+    end
     table.sort(items, function(a, b)
         return (a.copper or 0) * (a.count or 1) > (b.copper or 0) * (b.count or 1)
     end)
 
-    if #items > 0 then
+    local junk = S.loot["junk"]
+    if #items > 0 or junk then
         SectionLabel("Items")
         for _, entry in ipairs(items) do
             local row = AcquireRow(content, panW)
@@ -974,6 +977,27 @@ PopulatePanel = function()
             end)
             row:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
+            y = y + ROW_H
+        end
+
+        -- Junk row: collapsed grey items at the bottom of the items list
+        if junk and (junk.copper or 0) > 0 then
+            local row = AcquireRow(content, panW)
+            table.insert(activeRows, row)
+            row:SetPoint("TOPLEFT",  content, "TOPLEFT",  0, -y)
+            row:SetPoint("TOPRIGHT", content, "TOPRIGHT", 0, -y)
+            row.name:SetFont("Fonts\\FRIZQT__.TTF", 10, "")
+            row.name:SetTextColor(C_DIM[1], C_DIM[2], C_DIM[3], 1)
+            row.icon:SetTexture("Interface\\Icons\\INV_Misc_Bag_07")
+            row.icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+            local nameStr = "Junk"
+            if (junk.count or 0) > 1 then
+                nameStr = nameStr .. " |cff888888x" .. junk.count .. "|r"
+            end
+            row.name:SetText(nameStr)
+            row.value:SetFont("Fonts\\FRIZQT__.TTF", 10, "")
+            row.value:SetTextColor(C_DIM[1], C_DIM[2], C_DIM[3], 1)
+            row.value:SetText(P:FormatCopper(junk.copper) .. " |cff888888v|r")
             y = y + ROW_H
         end
     end

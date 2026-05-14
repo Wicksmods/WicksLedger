@@ -38,7 +38,12 @@ end
 local function RecalcTotal()
     local total = S.goldDelta
     for _, entry in pairs(S.loot) do
-        total = total + (entry.copper or 0) * (entry.count or 1)
+        if entry.isJunk then
+            -- Junk bucket: copper is already the running total, not per-item
+            total = total + (entry.copper or 0)
+        else
+            total = total + (entry.copper or 0) * (entry.count or 1)
+        end
     end
     S.totalCopper = total
 end
@@ -307,8 +312,32 @@ WL:On("LOOT_MSG", function(msg)
     if not itemID then return end
 
     local copper, source
+    local _, _, quality, _, _, _, _, _, _, icon, vendorPrice = GetItemInfo(itemID)
+
+    -- Grey (Poor quality) items: collapse into a single "Junk" bucket using vendor price.
+    if quality == 0 then
+        local vendorCopper = (vendorPrice or 0) * count
+        if S.loot["junk"] then
+            S.loot["junk"].count  = S.loot["junk"].count + count
+            S.loot["junk"].copper = S.loot["junk"].copper + vendorCopper
+        else
+            S.loot["junk"] = {
+                itemID = 0,
+                link   = nil,
+                icon   = "Interface\\Icons\\INV_Misc_Bag_07",
+                count  = count,
+                copper = vendorCopper,
+                source = "vendor",
+                isJunk = true,
+            }
+        end
+        RecalcTotal()
+        PersistActive()
+        if WL.UI and WL.UI.OnUpdate then WL.UI:OnUpdate() end
+        return
+    end
+
     if WL.Prices then copper, source = WL.Prices:GetPrice(itemID) end
-    local _, _, _, _, _, _, _, _, _, icon = GetItemInfo(itemID)
 
     local key = tostring(itemID)
     if S.loot[key] then
