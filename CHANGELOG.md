@@ -1,5 +1,9 @@
 # Changelog -- Wick's Ledger
 
+## 0.2.4 -- 2026-05-15
+
+- Fix panel becoming unresponsive after right-clicking an item row. The dismiss overlay was blocking all mouse input to the panel.
+
 ## 0.2.3 -- 2026-05-15
 
 - Right-click any item row to revert its price to vendor sell value. Useful for AH outliers that inflate the G/hr rate. The row updates immediately and the v suffix confirms vendor pricing is active.

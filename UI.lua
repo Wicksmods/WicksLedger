@@ -810,9 +810,7 @@ local function BuildContextMenu()
     MakeBgChild(ctxMenu, C_BG[1], C_BG[2], C_BG[3], 0.98)
     AddBorder(ctxMenu)
     ctxMenu:Hide()
-
-    -- Clicking anywhere outside closes the menu
-    ctxMenu:SetScript("OnHide", function() end)
+    ctxMenu:SetScript("OnLeave", function() ctxMenu:Hide() end)
     ctxMenu._items = {}
 end
 
@@ -851,15 +849,6 @@ local function ShowContextMenu(x, y, items)
     ctxMenu:Show()
 end
 
--- Hide context menu on global mouse-down outside it
-local ctxDismiss = CreateFrame("Frame", nil, UIParent)
-ctxDismiss:SetAllPoints()
-ctxDismiss:EnableMouse(false)
-ctxDismiss:SetFrameStrata("DIALOG")
-ctxDismiss:SetScript("OnMouseDown", function()
-    if ctxMenu and ctxMenu:IsShown() then ctxMenu:Hide() end
-    ctxDismiss:EnableMouse(false)
-end)
 
 -- ============================================================
 -- PANEL POPULATION
@@ -1062,7 +1051,6 @@ PopulatePanel = function()
                     })
                 end
                 if #menuItems > 0 then
-                    ctxDismiss:EnableMouse(true)
                     ShowContextMenu(sx, sy, menuItems)
                 end
             end)
