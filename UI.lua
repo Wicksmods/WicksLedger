@@ -172,6 +172,8 @@ local function ReleaseRow(row)
     row:SetParent(nil)
     row:SetScript("OnEnter", nil)
     row:SetScript("OnLeave", nil)
+    row:SetScript("OnMouseUp", nil)
+    row:RegisterForClicks("LeftButtonUp")
     table.insert(rowPool, row)
 end
 
@@ -795,6 +797,71 @@ function UI:ToggleOptions()
 end
 
 -- ============================================================
+-- CONTEXT MENU
+-- A minimal right-click menu. One item at a time; hides on any click outside.
+-- ============================================================
+local ctxMenu
+
+local function BuildContextMenu()
+    ctxMenu = CreateFrame("Frame", "WicksLedgerCtxMenu", UIParent)
+    ctxMenu:SetFrameStrata("TOOLTIP")
+    ctxMenu:SetClampedToScreen(true)
+    ctxMenu:EnableMouse(true)
+    MakeBgChild(ctxMenu, C_BG[1], C_BG[2], C_BG[3], 0.98)
+    AddBorder(ctxMenu)
+    ctxMenu:Hide()
+
+    -- Clicking anywhere outside closes the menu
+    ctxMenu:SetScript("OnHide", function() end)
+    ctxMenu._items = {}
+end
+
+local function ShowContextMenu(x, y, items)
+    if not ctxMenu then BuildContextMenu() end
+
+    -- Release old item buttons
+    for _, btn in ipairs(ctxMenu._items) do btn:Hide() end
+    ctxMenu._items = {}
+
+    local ITEM_H = 22
+    local menuW   = 180
+    local yOff    = -4
+
+    for _, item in ipairs(items) do
+        local btn = CreateFrame("Button", nil, ctxMenu)
+        btn:SetSize(menuW - 8, ITEM_H)
+        btn:SetPoint("TOPLEFT", ctxMenu, "TOPLEFT", 4, yOff)
+        local lbl = btn:CreateFontString(nil, "OVERLAY")
+        lbl:SetFont("Fonts\\FRIZQT__.TTF", 10, "")
+        lbl:SetTextColor(C_TEXT[1], C_TEXT[2], C_TEXT[3], 1)
+        lbl:SetAllPoints(); lbl:SetJustifyH("LEFT"); lbl:SetJustifyV("MIDDLE")
+        lbl:SetText(item.label)
+        btn:SetScript("OnEnter", function() lbl:SetTextColor(C_GREEN[1], C_GREEN[2], C_GREEN[3], 1) end)
+        btn:SetScript("OnLeave", function() lbl:SetTextColor(C_TEXT[1], C_TEXT[2], C_TEXT[3], 1) end)
+        btn:SetScript("OnClick", function()
+            ctxMenu:Hide()
+            if item.onClick then item.onClick() end
+        end)
+        yOff = yOff - ITEM_H
+        table.insert(ctxMenu._items, btn)
+    end
+
+    ctxMenu:SetSize(menuW, -yOff + 4)
+    ctxMenu:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", x, y)
+    ctxMenu:Show()
+end
+
+-- Hide context menu on global mouse-down outside it
+local ctxDismiss = CreateFrame("Frame", nil, UIParent)
+ctxDismiss:SetAllPoints()
+ctxDismiss:EnableMouse(false)
+ctxDismiss:SetFrameStrata("DIALOG")
+ctxDismiss:SetScript("OnMouseDown", function()
+    if ctxMenu and ctxMenu:IsShown() then ctxMenu:Hide() end
+    ctxDismiss:EnableMouse(false)
+end)
+
+-- ============================================================
 -- PANEL POPULATION
 -- ============================================================
 PopulateHistory = function()
@@ -969,6 +1036,8 @@ PopulatePanel = function()
             end
             row.value:SetText(valStr)
 
+            local itemKey = tostring(entry.itemID)
+            row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
             row:SetScript("OnEnter", function(self)
                 if entry.link then
                     GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
@@ -977,6 +1046,26 @@ PopulatePanel = function()
                 end
             end)
             row:SetScript("OnLeave", function() GameTooltip:Hide() end)
+            row:SetScript("OnMouseUp", function(self, btn)
+                if btn ~= "RightButton" then return end
+                GameTooltip:Hide()
+                local cx, cy = GetCursorPosition()
+                local scale  = UIParent:GetEffectiveScale()
+                local sx, sy = cx / scale, cy / scale
+                local menuItems = {}
+                if entry.source ~= "vendor" then
+                    table.insert(menuItems, {
+                        label   = "Revert to vendor price",
+                        onClick = function()
+                            if WL.Session then WL.Session:SetItemVendorPrice(itemKey) end
+                        end,
+                    })
+                end
+                if #menuItems > 0 then
+                    ctxDismiss:EnableMouse(true)
+                    ShowContextMenu(sx, sy, menuItems)
+                end
+            end)
 
             y = y + ROW_H
         end

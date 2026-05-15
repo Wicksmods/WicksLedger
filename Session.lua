@@ -157,6 +157,21 @@ local function ParseLootMessage(msg)
 end
 
 -- ============================================================
+-- PRICE OVERRIDE
+-- ============================================================
+function S:SetItemVendorPrice(key)
+    local entry = S.loot[key]
+    if not entry or entry.isJunk then return end
+    local _, _, _, _, _, _, _, _, _, _, vendorPrice = GetItemInfo(entry.itemID)
+    if not vendorPrice or vendorPrice <= 0 then return end
+    entry.copper = vendorPrice
+    entry.source = "vendor"
+    RecalcTotal()
+    PersistActive()
+    if WL.UI and WL.UI.OnUpdate then WL.UI:OnUpdate() end
+end
+
+-- ============================================================
 -- SESSION CONTROL
 -- ============================================================
 local function SnapshotXP()

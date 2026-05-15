@@ -1,5 +1,9 @@
 # Changelog -- Wick's Ledger
 
+## 0.2.3 -- 2026-05-15
+
+- Right-click any item row to revert its price to vendor sell value. Useful for AH outliers that inflate the G/hr rate. The row updates immediately and the v suffix confirms vendor pricing is active.
+
 ## 0.2.2 -- 2026-05-14
 
 - Fix item rows overlapping when the row pool is reused. Recycled rows now clear their anchor points before being repositioned.
