@@ -129,8 +129,10 @@ local activeRows = {}
 local function AcquireRow(parent, panelW)
     local row = table.remove(rowPool)
     if not row then
-        row = CreateFrame("Frame", nil, parent)
+        row = CreateFrame("Button", nil, parent)
         row:SetHeight(ROW_H)
+        row:EnableMouse(true)
+        row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
 
         -- separator on bg child
         local bgChild = MakeBgChild(row, C_BORDER[1], C_BORDER[2], C_BORDER[3], 0)
@@ -173,7 +175,6 @@ local function ReleaseRow(row)
     row:SetScript("OnEnter", nil)
     row:SetScript("OnLeave", nil)
     row:SetScript("OnMouseUp", nil)
-    row:RegisterForClicks("LeftButtonUp")
     table.insert(rowPool, row)
 end
 
@@ -1026,7 +1027,6 @@ PopulatePanel = function()
             row.value:SetText(valStr)
 
             local itemKey = tostring(entry.itemID)
-            row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
             row:SetScript("OnEnter", function(self)
                 if entry.link then
                     GameTooltip:SetOwner(self, "ANCHOR_RIGHT")

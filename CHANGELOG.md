@@ -1,5 +1,9 @@
 # Changelog -- Wick's Ledger
 
+## 0.2.5 -- 2026-05-15
+
+- Fix panel not opening. Item rows were created as Frame instead of Button, so mouse events including right-click and tooltip hover were never firing.
+
 ## 0.2.4 -- 2026-05-15
 
 - Fix panel becoming unresponsive after right-clicking an item row. The dismiss overlay was blocking all mouse input to the panel.
