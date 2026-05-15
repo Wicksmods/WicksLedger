@@ -1,5 +1,9 @@
 # Changelog -- Wick's Ledger
 
+## 0.2.2 -- 2026-05-14
+
+- Fix item rows overlapping when the row pool is reused. Recycled rows now clear their anchor points before being repositioned.
+
 ## 0.2.1 -- 2026-05-13
 
 - Grey (Poor quality) items collapse into a single Junk row valued at vendor price. Count shown, no individual entries cluttering the list.

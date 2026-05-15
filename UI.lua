@@ -159,6 +159,7 @@ local function AcquireRow(parent, panelW)
         row.value:SetJustifyH("RIGHT")
     end
     row:SetParent(parent)
+    row:ClearAllPoints()
     -- name width: fills between icon+gap and value column
     local w = panelW or PANEL_W_DEF
     row.name:SetWidth(w - PAD - ICON_SIZE - 4 - 110)
